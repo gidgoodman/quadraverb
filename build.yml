@@ -1,9 +1,5 @@
 name: Build VST3
-
-on:
-  push:
-  workflow_dispatch:
-
+on: [push, workflow_dispatch]
 jobs:
   build:
     strategy:
@@ -13,17 +9,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Linux deps
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libfreetype-dev libfontconfig1-dev libgl-dev
-
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-
       - name: Build
         run: cmake --build build --config Release --parallel 2
-
       - uses: actions/upload-artifact@v4
         with:
           name: QuadraVerbPlus-VST3-${{ runner.os }}
