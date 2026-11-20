@@ -23,7 +23,3 @@ jobs:
         with:
           name: QuadraVerb-Plus-Windows-VST3
           path: build/QuadraVerbPlus_artefacts/Release/VST3/
-Use code with caution.
-(Note: Adding submodules: recursive under actions/checkout@v4 also ensures JUCE is cloned properly if your repo includes JUCE as a Git submodule).
-Once you replace .github/workflows/build.yml with the snippet above and push, let me know if the GitHub Actions build succeeds or if the C++ compiler flags any errors in SysExPanel.cpp or PluginEditor.cpp.
-AI responses may include mistakes. Learn more
