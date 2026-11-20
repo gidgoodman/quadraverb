@@ -1,18 +1,13 @@
-name: Build QuadraVerb Plus VST3
-on: push
+name: Build VST3
+on: [push]
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
         with:
-          submodules: recursive
-      - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-      - name: Build VST3
-        run: cmake --build build --config Release --parallel
-      - name: Upload VST3 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: QuadraVerb-Plus-Windows-VST3
+          name: VST3
           path: build/QuadraVerbPlus_artefacts/Release/VST3/
