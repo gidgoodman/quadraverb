@@ -1,17 +1,29 @@
 name: Build QuadraVerb Plus VST3
-on: [push, workflow_dispatch]
+
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
       - name: Build VST3
         run: cmake --build build --config Release --parallel
+
       - name: Upload VST3 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: QuadraVerb-Plus-Windows-VST3
           path: build/QuadraVerbPlus_artefacts/Release/VST3/
+Use code with caution.
+(Note: Adding submodules: recursive under actions/checkout@v4 also ensures JUCE is cloned properly if your repo includes JUCE as a Git submodule).
+Once you replace .github/workflows/build.yml with the snippet above and push, let me know if the GitHub Actions build succeeds or if the C++ compiler flags any errors in SysExPanel.cpp or PluginEditor.cpp.
+AI responses may include mistakes. Learn more
