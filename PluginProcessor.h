@@ -1,83 +1,73 @@
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
-#include <unordered_map>
-#include <string>
+#include <juce_dsp/juce_dsp.h>
 #include <array>
-#include "Engine.h"
+#include <vector>
 #include "Params.h"
-#include "Presets.h"
-#include "QuadraVerbSysEx.h"
-#include "SysExMap.h"
 
-class QuadraProcessor : public juce::AudioProcessor, private juce::AsyncUpdater
+class QuadraProcessor : public juce::AudioProcessor
 {
 public:
     QuadraProcessor();
     void prepareToPlay (double sampleRate, int blockSize) override;
     void releaseResources() override {}
-    bool isBusesLayoutSupported (const BusesLayout&) const override;
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
     const juce::String getName() const override { return "QuadraVerb Plus"; }
     bool acceptsMidi() const override { return true; }
-    bool producesMidi() const override { return true; }   // SysEx out (the hardware path in the SysEx panel avoids hosts that drop it)
-    double getTailLengthSeconds() const override { return 12.0; }
-    int getNumPrograms() override { return kNumPresets; }
-    int getCurrentProgram() override { return getProgram(); }
-    void setCurrentProgram (int i) override { changeProgram (i); }
-    const juce::String getProgramName (int i) override { return slotName (i); }
-    void changeProgramName (int, const juce::String&) override {}
-    void getStateInformation (juce::MemoryBlock&) override;
-    void setStateInformation (const void*, int) override;
+    bool producesMidi() const override { return true; }
+    double getTailLengthSeconds() const override { return 8.0; }
 
-    // ---- programs: 00-99 start as the factory programs; STORE puts your own over any slot (kept in a shared file too)
-    void loadPreset (int index);          // applies a program at once (state restore, tests)
-    void changeProgram (int index);       // click-free: fades the output, swaps the program while silent, clears the effect tails, fades back up
+    int getNumPrograms() override { return kNumPresets; }
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram (int index) override { changeProgram (index); }
+    const juce::String getProgramName (int index) override { return slotName (index); }
+    void changeProgramName (int index, const juce::String& newName) override;
+
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    void changeProgram (int index);
     void storeProgram (int slot);
     void recallFactory (int slot);
-    void recallAllFactory();
     juce::String currentName() const;
-    void setCurrentName (const juce::String& n);
+    void setCurrentName (const juce::String& name);
     juce::String slotName (int slot) const;
-    bool slotIsUser (int slot) const;
-    int  getProgram() const { return (int) apvts.state.getProperty ("program", 0); }
-
-    // ---- sampling configuration (front panel): BYPASS records, EQ plays; the engine reports its state back for the LCD
-    void requestRecord() { recRequest = 1; }
-    void requestPlay()   { playRequest = 1; }
-    int  sampleState() const   { return sampState.load(); }    // 0 idle, 1 waiting for audio, 2 recording
-    bool samplePlaying() const { return sampPlaying.load(); }
-
-    QuadraVerbSysEx sysex;                       // throttled SysEx output, hardware MIDI ports, dump storage
-    void sysexMirror (const char* paramId);      // sends a parameter packet if mirroring is on and the parameter has a page number
+    int getProgram() const { return currentProgram; }
 
     juce::AudioProcessorValueTreeState apvts;
-    std::atomic<float> inMeter { 0.f }, outMeter { 0.f };
+    std::atomic<float> inMeter { 0.f };
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout makeLayout();
-    qv::EP readParams();
-    float rawf (const char* id) const { return rp[(size_t) pidx.at (id)]->load(); }
-    juce::ValueTree userNode (int slot) const;
-    static juce::File userBankFile();
-    void loadUserBank();
-    void saveUserBank() const;
-    void handleAsyncUpdate() override;
+    void initFactoryBank();
 
-    qv::Engine engine;
-    std::vector<std::atomic<float>*> rp;
-    std::unordered_map<std::string, int> pidx;
-    std::atomic<int> pendingProgram { -1 };
-    // program change muting (audio thread owns muteGain)
-    std::atomic<bool> muteTarget { false }, resetPending { false };
-    float muteGain = 1.f, lastInGain = 1.f, lastOutGain = 1.f; double sampleRateNow = 48000.0;
-    struct ProgramTimer : juce::Timer { std::function<void()> fn; void timerCallback() override { stopTimer(); if (fn) fn(); } } programTimer;
-    std::atomic<int> programTarget { -1 };
-    std::atomic<int> recRequest { 0 }, playRequest { 0 }, sampState { 0 };
-    std::atomic<bool> sampPlaying { false };
-    float cc[128] = {}, bend = 0.f, aftertouch = 0.f, noteNum = 0.f, noteVel = 0.f;
+    struct ProgramSlot
+    {
+        juce::String name;
+        std::vector<float> values;
+    };
+
+    std::array<ProgramSlot, kNumPresets> bank;
+    int currentProgram = 0;
+
+    // DSP State
+    double sr = 48000.0;
+    juce::dsp::IIR::Filter<float> eqLoL, eqLoR, eqMidL, eqMidR, eqHiL, eqHiR;
+    std::vector<float> delayLineL, delayLineR;
+    int delayWritePos = 0;
+    float lfoPhase = 0.f, ringPhase = 0.f;
+
+    // 4-comb + 2-allpass stereo reverb tank
+    std::array<std::vector<float>, 4> combL, combR;
+    std::array<int, 4> combPosL {}, combPosR {};
+    std::array<float, 4> combLpL {}, combLpR {};
+    std::array<std::vector<float>, 2> apL, apR;
+    std::array<int, 2> apPosL {}, apPosR {};
+    float gateEnv = 1.f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (QuadraProcessor)
 };
